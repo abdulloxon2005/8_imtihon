@@ -10,7 +10,13 @@ from .permissions import IsAdmin,IsUser
 from decimal import Decimal
 from rest_framework.generics import ListAPIView
 from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 
+
+@extend_schema(
+    summary="Royxatdan otish Apisi",
+    description="Bu yerda telefon raqam unique bolishi kerak"
+)
 class SignUp(APIView):
     permission_classes = [AllowAny]
 
@@ -31,7 +37,10 @@ class SignUp(APIView):
         user.save()
         return Response({"message":"User  muvaffaqiyatli yaratildi","username":user.username,"phone": user.phone,"role": user.role},status=status.HTTP_201_CREATED)
 
-
+@extend_schema(
+    summary="Barcha mahsulotlarni korish uchu Api",
+    description="Bu yerda royxatdan otish shart emas"
+)
 class FoodListView(ListAPIView):
     queryset = Food.objects.filter(mavjud="mavjud")
     serializer_class = FoodSerializers
@@ -48,17 +57,30 @@ class FoodListView(ListAPIView):
         if search:
             queryset = queryset.filter(nomi__icontains=search)
         return queryset 
-
+    
+@extend_schema(
+    summary="Admin uchun CRUD Api",
+    description="Bu APIni Admin rolli foydalanuvchi kirib ishlata oladi"
+)
 class AdminFoodViewSet(ModelViewSet):
     queryset = Food.objects.all()
     serializer_class = FoodSerializers
     permission_classes = [IsAdmin]
+
+@extend_schema(
+    summary="Admin uchun promokod qoshish",
+    description="Bu APIni Admin rolli foydalanuvchi kirib ishlata oladi"
+)
 
 class PromokodViewSet(ModelViewSet):
     queryset = Promokod.objects.all()
     serializer_class = PromokodSerializers
     permission_classes = [IsAdmin]
 
+@extend_schema(
+    summary="User uchun buyurtma qilish bo'limi",
+    description="Bu APIni user rolli foydalanuvchi ishlata oladi"
+)
 class UserBuyurtmaViewSet(APIView):
     permission_classes = [IsUser]
 
@@ -120,7 +142,10 @@ class UserBuyurtmaViewSet(APIView):
             status=status.HTTP_201_CREATED
         )
 
-
+@extend_schema(
+    summary="User uchun buyurtma tarixini korish  bo'limi",
+    description="Bu APIni user rolli foydalanuvchi ishlata oladi"
+)
 class BuyurtmaTarix(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -130,7 +155,10 @@ class BuyurtmaTarix(APIView):
         return Response(serializer.data, status=status.HTTP_200_OK)
         
 
-
+@extend_schema(
+    summary="Admin uchun buyurtma statusini o'zgartrish  bo'limi",
+    description="Bu APIni admin rolli foydalanuvchi ishlata oladi ,bunda statusni ozgartrish uchun PATCH sorov"
+)
 class BuyurtmaStatusUpdate(APIView):
     permission_classes = [IsAdmin]
 
@@ -146,7 +174,10 @@ class BuyurtmaStatusUpdate(APIView):
             return Response({"message":"buyurtma statusi yangilandi", "status": serializer.data['status']})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-
+@extend_schema(
+    summary="Admin uchun Ovqatlar mavjud statusni o'zgartrish bo'limi",
+    description="Bu APIni admin rolli foydalanuvchi ishlata oladi,bunda mavjud bolimini statusni tugadi ga o'zgartrish mumkin"
+)
 class AdminFoodStatusUpdate(APIView):
     permission_classes = [IsAdmin]
 

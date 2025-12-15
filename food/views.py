@@ -150,11 +150,11 @@ class UserBuyurtmaViewSet(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             try:
+                now = timezone.now()
                 promokod = Promokod.objects.get(
                     nomi__iexact=promokod_code,
-                    start_date__lte=timezone.now(),
-                    end_date__gte=timezone.now(),
-                    is_active=True
+                    start_date__lte=now,
+                    end_date__gte=now
                 )
                 total_price = max(total_price - promokod.amount, 0)
                 buyurtma.promokod = promokod
@@ -164,17 +164,15 @@ class UserBuyurtmaViewSet(APIView):
                     {"error": "Promokod notogri yoki muddati tugagan"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-
+            
         buyurtma.total_price = total_price
         buyurtma.save()
 
         return Response(
             BuyurtmaSerializer(buyurtma).data,
             status=status.HTTP_201_CREATED
-        )
-
-
-
+)
+    
 @extend_schema(
     summary="User uchun buyurtma tarixini korish  bo'limi",
     description="Bu APIni user rolli foydalanuvchi ishlata oladi"

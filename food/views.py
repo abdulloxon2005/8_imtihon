@@ -38,7 +38,7 @@ class SignUp(APIView):
 
         if CustomUser.objects.filter(username=username).exists():
             return Response(
-                {"detail": "Bunday username mavjud"},
+                {"detail": "Bu username bor"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
@@ -161,7 +161,7 @@ class UserBuyurtmaViewSet(APIView):
             except Promokod.DoesNotExist:
                 buyurtma.delete()
                 return Response(
-                    {"error": "Promokod notog‘ri yoki muddati tugagan"},
+                    {"error": "Promokod notogri yoki muddati tugagan"},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 

@@ -5,7 +5,7 @@ from .models import CustomUser,Food,Buyurtma,BuyurtmaItems,Promokod
 from rest_framework.permissions import AllowAny,IsAuthenticated
 from rest_framework import status
 from rest_framework.viewsets import ModelViewSet
-from .serializers import FoodSerializers,PromokodSerializers,BuyurtmaSerializer,BuyurtmaStatusSerializer,FoodStatusSerializer
+from .serializers import FoodSerializers,PromokodSerializers,BuyurtmaSerializer,BuyurtmaStatusSerializer,FoodStatusSerializer,BuyurtmaCreateSerializer,SignUpSerializer
 from .permissions import IsAdmin,IsUser
 from decimal import Decimal
 from rest_framework.generics import ListAPIView
@@ -18,24 +18,44 @@ from drf_spectacular.utils import extend_schema
     description="Bu yerda telefon raqam unique bolishi kerak"
 )
 class SignUp(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
+    serializer_class = SignUpSerializer
 
-    def post(self,request):
-        username = request.data.get("username")
-        password = request.data.get("password")
-        phone = request.data.get("phone")
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        serializer = SignUpSerializer(data=data)
 
-        if not username or not password or not phone:
-            return Response({"error":"malumotlarni hato kiritildi"},status = status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        user_data = serializer.validated_data
+        username = user_data.get("username")
+        password = user_data.get("password")
+        phone = user_data.get("phone")
 
         if CustomUser.objects.filter(username=username).exists():
-            return Response({"error":"Username allaqchon bor"},status=status.HTTP_400_BAD_REQUEST)
-        
-        user = CustomUser.objects.create_user(username=username,password=password,phone=phone)
-        user.is_staff = False
-        user.is_superuser = False
-        user.save()
-        return Response({"message":"User  muvaffaqiyatli yaratildi","username":user.username,"phone": user.phone,"role": user.role},status=status.HTTP_201_CREATED)
+            return Response(
+                {"detail": "Bunday username mavjud"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        new_user = CustomUser.objects.create_user(
+            username=username,
+            password=password,
+            phone=phone
+        )
+
+        response_data = {
+            "detail": "Foydalanuvchi muvaffaqiyatli yaratildi",
+            "username": new_user.username,
+            "phone": new_user.phone,
+            "role": new_user.role
+        }
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
 
 @extend_schema(
     summary="Barcha mahsulotlarni korish uchu Api",
@@ -82,17 +102,23 @@ class PromokodViewSet(ModelViewSet):
     description="Bu APIni user rolli foydalanuvchi ishlata oladi"
 )
 class UserBuyurtmaViewSet(APIView):
-    permission_classes = [IsUser]
+    permission_classes = [IsAuthenticated, IsUser]
+    serializer_class = BuyurtmaCreateSerializer
 
     def post(self, request):
-        manzil = request.data.get("manzil")
-        items_data = request.data.get("buyurtma")  
-        promokod_id = request.data.get("promokod_id")
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
 
-        if not manzil or not items_data:
-            return Response({"error":"Malumotlar toliq emas"},status=status.HTTP_400_BAD_REQUEST)
+        manzil = serializer.validated_data["manzil"]
+        items_data = serializer.validated_data["buyurtma"]
+        promokod_code = serializer.validated_data.get("promokod")
 
-        buyurtma = Buyurtma.objects.create(user=request.user, manzil=manzil, total_price=0)
+        buyurtma = Buyurtma.objects.create(
+            user=request.user,
+            manzil=manzil,
+            total_price=0
+        )
+
         total_price = Decimal("0")
 
         for item in items_data:
@@ -100,12 +126,14 @@ class UserBuyurtmaViewSet(APIView):
                 food = Food.objects.get(id=item["food_id"], mavjud="mavjud")
             except Food.DoesNotExist:
                 buyurtma.delete()
-                return Response({"error":f"Mahsulot id={item.get('food_id')} topilmadi yoki tugagan"},status=404)
+                return Response(
+                    {"error": "Mahsulot topilmadi yoki tugagan"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
 
-            count = int(item["count"])
+            count = item["count"]
             item_price = food.narxi * count
             total_price += item_price
-
 
             BuyurtmaItems.objects.create(
                 buyurtma=buyurtma,
@@ -114,33 +142,38 @@ class UserBuyurtmaViewSet(APIView):
                 total_price=item_price
             )
 
-
-
-        if promokod_id and total_price >= 100000:
+        if promokod_code:
+            if total_price < 100000:
+                buyurtma.delete()
+                return Response(
+                    {"error": "Promokod uchun minimal summa 100 000"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             try:
                 promokod = Promokod.objects.get(
-                    id=promokod_id,
+                    nomi__iexact=promokod_code,
                     start_date__lte=timezone.now(),
-                    end_date__gte=timezone.now()
+                    end_date__gte=timezone.now(),
+                    is_active=True
                 )
-                total_price -= promokod.amount
+                total_price = max(total_price - promokod.amount, 0)
                 buyurtma.promokod = promokod
             except Promokod.DoesNotExist:
-                pass
+                buyurtma.delete()
+                return Response(
+                    {"error": "Promokod notog‘ri yoki muddati tugagan"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        buyurtma.total_price = max(total_price, 0)
+        buyurtma.total_price = total_price
         buyurtma.save()
 
-
-
         return Response(
-            {
-                "message":"Buyurtma muvaffaqiyatli yaratildi",
-                "buyurtma_id":buyurtma.id,
-                "total_price":buyurtma.total_price
-            },
+            BuyurtmaSerializer(buyurtma).data,
             status=status.HTTP_201_CREATED
         )
+
+
 
 @extend_schema(
     summary="User uchun buyurtma tarixini korish  bo'limi",

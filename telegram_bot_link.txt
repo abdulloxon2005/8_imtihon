@@ -1,2 +1,4 @@
 https://imtihon.33x.uz/
 telegram bot:https://t.me/sinovzakaz_bot
+github link:https://github.com/abdulloxon2005/fastfood_zakaz_bot
+github link2:https://github.com/abdulloxon2005/8_imtihon
